@@ -78,6 +78,8 @@ int sendMoisture(int level) {
 	}
 
 int pumpWater(int length) {
+	Lcd4_Clear();
+	Lcd4_Write_String("Pumping...");
 	
 	PORTD |= (1 << 6);
 	customDelay(length);
@@ -88,8 +90,10 @@ int pumpWater(int length) {
 
 int drainWater(int Dlength) {
 	//2.50 measured time
-	PORTD &= ~(1 << 6);	
 	
+	Lcd4_Write_String("Draining...");
+	
+	PORTD &= ~(1 << 6);	
 	PORTD |= (1 << 7);
 	customDelay(Dlength);
 	PORTD &= ~(1 << 7);
@@ -97,15 +101,6 @@ int drainWater(int Dlength) {
 	return 3;
 }
 
-int testLamps(void){
-	
-	return 4;
-}
-
-int testbuttons (void) {
-	
-	return 5;
-}
 
 
 
@@ -116,57 +111,54 @@ int main(void)
 	//motor PWM on PD5 (out)
 	//motor forwward/backwards 7/6 (out)
 	
+	//setup IO pins
 	DDRC = 0b1111110;
-	
 	DDRD = 0b00;
 	DDRD = 0b11110000;
-	
 	DDRB= 0b111110;
 	
+	//PWM initialization
 	DDRD|=(1<<5);
-	//PWM initalization
-		TCCR0A=0b00100011;
-		OCR0B = 255;
-		
-		//PWM on
-		TCCR0B=0b101;
-		// off -- TCCR0B 0 0b0;
-		
+	TCCR0A=0b00100011;
+	OCR0B = 255;	
+	//PWM on
+	TCCR0B=0b101;
+
+	//ADC/moisture sensor initialization 	
 	ADMUX|=(1<<REFS0); //set reference voltage
 	ADCSRA|=(1<<ADPS1)|(1<<ADPS0);//ADC clock prescaler/ 8
 	ADCSRA|=(1<<ADEN);//enables the ADC
 		
 	int moistureSensor = 0;
-	int waterTh = 0;
-	int waterMeasured = 0;
-	
+	int waterTh = 550;
 	int waterAmount = 80;
 
+	//Serial communication initialization
     USART_init();
-	DDRB = 0x20;
-	PORTB = 0x00;
 	char serial = '0';
 	
-
-	
-	EIMSK = (1 << INT1);
-	EIMSK = 0b11; //setup interrupt 0 listening on pin 2 of arduino
+	//Interrupt(s) initialization
+	EIMSK = 0b11;
 	sei();
 	
+	//LCD initialization
 	Lcd4_Init();
 	Lcd4_Clear();
 	Lcd4_Write_String("->");
-	
 	int menu = 0;
-	char s[10001];
+	char s[10001]; //for reading (int) to char array
+	
 	
     while (1) 
     {
-		char my_string[7];
-		itoa(moistureSensor, my_string, 10);
 		
-		if ((UCSR0A&(1<<RXC0))) serial = USART_receive();
+		//read in mositure sensor value
+		ADCSRA|=(1<<ADSC);//start ADC conversion
+		while((ADCSRA&(1<<ADSC))){} // wait till the ADC is done
+		uint8_t theLowADC=ADCL; //read lower bits
+		moistureSensor=ADCH << 8|theLowADC; //read upper bits
 		
+		//Serial Debugging
 		switch(serial)
 		{
 			case '1':
@@ -182,185 +174,177 @@ int main(void)
 			break;
 			
 			case '4':
-			testLamps();
-			break;
-			
-			case  '5':
-				Lcd4_Write_String(my_string);
-				serial = '9';
-			testbuttons();
+			Lcd4_Write_String("Testing....");
+			_delay_ms(3000);
+			Lcd4_Clear();
+			serial = 'q';
 			break;
 		}
 		
 		
-
-				switch(menu)
-				{
-					
-					case 1000:
-					Lcd4_Write_String("Calibrate  ->");
-					
-					
-					Lcd4_Clear();
-					break;
-					
-					case 1001:
-					Lcd4_Write_String("Watering early");
-					Lcd4_Clear();
-					break;
-					
-						case 1002:
-						waterTh = waterTh + 10;
-						Lcd4_Write_String("Updated");
-						_delay_ms(1000);
-						Lcd4_Clear();
-						menu = 1001;
-						break;
-
-					case 1101:
-					Lcd4_Write_String("Watering late");
-					Lcd4_Clear();
-					break;
-					
-						case 1102:
-						waterTh = waterMeasured;
-						Lcd4_Write_String("Updated");
-						_delay_ms(1000);
-						Lcd4_Clear();
-						menu = 1101;
-						break;
-					
-					case 1201:
-					Lcd4_Write_String("Add 100ml");
-					Lcd4_Clear();
-					break;
-					
-					
-						case 1202:
-						waterAmount += 10;
-						Lcd4_Write_String("Updated");
-						_delay_ms(1000);
-						Lcd4_Clear();
-						menu = 1201;
-						break;
-					
-					case 1301:
-					Lcd4_Write_String("Remove 100ml");
-					Lcd4_Clear();
-					break;
-					
-						case 1302:
-						waterAmount += -10;
-						if (waterAmount == 0) waterAmount = 10;
-						Lcd4_Write_String("Updated");
-						_delay_ms(1000);
-						Lcd4_Clear();
-						menu = 1301;
-						break;
-										
-					case 2000:
-					Lcd4_Write_String("Test  ->");
-					
-					
-					Lcd4_Clear();
-					break;
-					
-					case 2001:
-					Lcd4_Write_String("Pump");
-					Lcd4_Clear();
-					break;
-					
-					case 2002:
-					Lcd4_Write_String("Pumping...");
-					pumpWater(5);
-					menu = 2001;
-					break;
-					
-					case 2101:
-					Lcd4_Write_String("Drain");
-					Lcd4_Clear();
-					break;
-					
-					case 2102:
-					Lcd4_Write_String("Draining...");
-					drainWater(5);
-					menu = 2101;
-					break;
-					
-					case 2201:
-					Lcd4_Write_String("Sensor Val");
-					Lcd4_Clear();
-					break;
-					
-						case 2202:
-						
-						
-						dtostrf(moistureSensor,3,2,s);
-						
-						Lcd4_Write_String(s);
-						Lcd4_Clear();
-						break;
-					
-					default:
-					Lcd4_Write_String("Hello!  ->");
-					
-					
-					Lcd4_Clear();
-					menu = 0;
-					break;
-				}
-		
-		
-		for (int i = 0; i <2; i++)
+		//LCD UI thousands are main menus, hundreds and sub menus and onces are from confirmed selection
+		//indenting here represents the depth of the selection (calibrating -> watering early -> updating... is depth 3 so 3 indents)
+		switch(menu)
 		{
 			
-			if(PINB & (1<<i))
-
-			{
+			case 1000:
+			Lcd4_Write_String("Calibrate ->");
+			_delay_ms(10);
+			Lcd4_Clear();
+			break;
+			
+				case 1001:
+				Lcd4_Write_String("Watering early");
 				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+			
+					case 1002:
+					waterTh = waterTh + 1;
+					Lcd4_Write_String("Updated");
+					_delay_ms(1000);
+					Lcd4_Clear();
+					menu = 1001;
+					break;
+
+				case 1101:
+				Lcd4_Write_String("Watering late");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+			
+					case 1102:
+					waterTh = moistureSensor-1;
+					Lcd4_Write_String("Updated");
+					_delay_ms(1000);
+					Lcd4_Clear();
+					menu = 1101;
+					break;
+			
+				case 1201:
+				Lcd4_Write_String("Add 100ml");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+			
+			
+					case 1202:
+					waterAmount += 10;
+					Lcd4_Write_String("Updated");
+					_delay_ms(1000);
+					Lcd4_Clear();
+					menu = 1201;
+					break;
+			
+				case 1301:
+				Lcd4_Write_String("Remove 100ml");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+			
+					case 1302:
+					waterAmount += -10;
+					if (waterAmount == 0) waterAmount = 1;
+					Lcd4_Write_String("Updated");
+					_delay_ms(1000);
+					Lcd4_Clear();
+					menu = 1301;
+					break;
+			
+			case 2000:
+			Lcd4_Write_String("Test ->");
+			_delay_ms(10);
+			Lcd4_Clear();
+			break;
+			
+				case 2001:
+				Lcd4_Write_String("Pump");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
 				
-				if(PINB & (1<<i))
-				{
-					if(i == 0) menu+= 1;
+					case 2002:
+					pumpWater(waterAmount/10);
+					menu = 2001;
+					break;
+				
+				case 2101:
+				Lcd4_Write_String("Drain");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+				
+					case 2102:
+					drainWater(waterAmount/10);
+					menu = 2101;
+					break;
+				
+				case 2201:
+				Lcd4_Write_String("Sensor Val:");
+				_delay_ms(10);
+				Lcd4_Clear();
+				break;
+				
+					case 2202:
+					dtostrf(moistureSensor,3,2,s);
+					Lcd4_Write_String(s);
+					_delay_ms(10);
+					Lcd4_Clear();
+					break;
+			
+			default:
+			Lcd4_Write_String("Welcome!! ->");
+			_delay_ms(10);
+			Lcd4_Clear();
+			menu = 0;
+			break;
+		}
+		
+		
+		//check if the sensor is reading a value above the threshold if it is then water the soil 
+		if (moistureSensor > waterTh)
+		{
+			pumpWater(waterAmount);
+		}
+
+
+		//if the serial flag is risen then read it (if there's anything coming from th serial bus)
+		if ((UCSR0A&(1<<RXC0))) serial = USART_receive();
+		
+		for (int i = 0; i <2; i++){
+
+			if(PINB & (1<<i)){
+				_delay_ms(10);
+				//double check to see if switch was actually pressed
+				if(PINB & (1<<i)){
+					
+					if(i == 0) menu+= 1; //confirm selection (move one menu deeper)
+					
+					//move across depth (between different options)
 					if(i == 1){
-						
-						if (menu%1000 ==0){
-							 menu += 1000;
-						} 
-						else{
-							menu+=100;
-						}
-					
-					//
-					
+						if (menu%1000 ==0){menu += 1000;} //main menus
+						else{menu+=100;} //sub menus
 					}
+					//extra denounce
 					_delay_ms(1000);
 				}
-			}
+			}	
 		}
-				
-		ADCSRA|=(1<<ADSC);//start ADC conversion
-		while((ADCSRA&(1<<ADSC))){} // wait till the ADC is done
-		uint8_t theLowADC=ADCL; //read lower bits
-		moistureSensor=ADCH << 8|theLowADC; //read upper bits
-				
-		//PWMPotMeasured=100-(PWMPotMeasured*100.00)/1023.00;
-		//PORTB ^= 0b100000;
-		//_delay_ms(5000);
     }
 	
 }
 
-	ISR(INT0_vect){
-		//drip tray full
-		drainWater(150);
-		
-		
-	}
-	ISR(INT1_vect){
-		
-			PORTB |= (1 <<5);
-			_delay_ms(100);
-	}
+//drip tray full
+ISR(INT0_vect){		
+	Lcd4_Clear();
+	drainWater(150);	
+}
+
+//water bucket empty
+ISR(INT1_vect){
+	Lcd4_Clear();
+	Lcd4_Write_String("Refill bucket");
+	_delay_ms(10);
+}
 
 
